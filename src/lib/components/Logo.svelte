@@ -30,13 +30,17 @@
   );
 
   // Determine the logo URL based on current theme
-  const logoUrl = $derived(() => {
+  // Use a state variable to avoid hydration mismatch
+  let logoUrl = $state(settingsState?.logoUrlLight || fallbackSrc);
+
+  // Update logo URL when mode changes (client-side only)
+  $effect(() => {
     const currentMode = mode.current;
 
     if (currentMode === "dark") {
-      return settingsState?.logoUrlDark || fallbackSrc;
+      logoUrl = settingsState?.logoUrlDark || fallbackSrc;
     } else {
-      return settingsState?.logoUrlLight || fallbackSrc;
+      logoUrl = settingsState?.logoUrlLight || fallbackSrc;
     }
   });
 
@@ -47,11 +51,10 @@
 
   // Reset error state when URL changes, but only trigger loading for actual URL changes
   $effect(() => {
-    const currentUrl = logoUrl();
-    if (currentUrl && currentUrl !== lastLoadedUrl) {
+    if (logoUrl && logoUrl !== lastLoadedUrl) {
       imageError = false;
       isLoading = true;
-    } else if (currentUrl === lastLoadedUrl && lastLoadedUrl !== "") {
+    } else if (logoUrl === lastLoadedUrl && lastLoadedUrl !== "") {
       // Same URL as already loaded, don't show loading state
       isLoading = false;
     }
@@ -59,17 +62,17 @@
 
   function handleImageLoad() {
     isLoading = false;
-    lastLoadedUrl = logoUrl();
+    lastLoadedUrl = logoUrl;
   }
 
   function handleImageError() {
     imageError = true;
     isLoading = false;
-    lastLoadedUrl = logoUrl();
+    lastLoadedUrl = logoUrl;
   }
 
   // Final image source - use fallback if there's an error
-  const finalSrc = $derived(imageError ? fallbackSrc : logoUrl());
+  const finalSrc = $derived(imageError ? fallbackSrc : logoUrl);
 </script>
 
 <div class="relative">

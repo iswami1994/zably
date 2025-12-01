@@ -22,6 +22,9 @@
   const getSession = getContext<() => Session | null>("session");
   const session = $derived(getSession?.() || null);
 
+  // Get pricing data from page data
+  let { data } = $props();
+
   // Icons
   import {
     SparkleIcon,
@@ -128,53 +131,19 @@
     },
   ];
 
-  // Pricing overview data
-  const freePlan = {
-    name: "FREE",
-    price: "$0",
-    period: "forever",
-    features: [
-      "Limited access to Text models",
-      "Limited access to Image models",
-    ],
-  };
+  // Pricing data from database
+  const freePlan = $derived(data.freePlan);
+  const paidPlans = $derived(data.paidPlans);
 
-  const paidPlans = [
-    {
-      name: "STARTER",
-      price: "$4.99",
-      period: "month",
-      features: [
-        "Access to all text models",
-        "Access to some image models",
-        "Basic support",
-      ],
-    },
-    {
-      name: "PRO",
-      price: "$14.99",
-      period: "month",
-      features: [
-        "Access to all text models",
-        "Access to all image models",
-        "Access to some video models",
-        "Increased limits",
-        "Priority support",
-      ],
-    },
-    {
-      name: "ADVANCED",
-      price: "$29.99",
-      period: "month",
-      features: [
-        "Access to all text models",
-        "Access to all image models",
-        "Access to all video models",
-        "Increased limits++",
-        "Premium support",
-      ],
-    },
-  ];
+  // Helper function to format price from cents
+  function formatPrice(priceAmount: number, currency: string): string {
+    const amount = priceAmount / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+      minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount);
+  }
 </script>
 
 <svelte:head>
@@ -244,19 +213,19 @@
             <ArrowRightIcon class="w-4 h-4" />
           </Button>
         {:else}
-          <!-- Not Authenticated: Show "Sign In" and "Sign Up" -->
+          <!-- Not Authenticated: Show "Sign Up" and "Sign In" -->
+          <Button
+            onclick={() => handleNavClick("signup")}
+            class="cursor-pointer bg-white text-black text-md font-medium hover:bg-gray-300 transition-colors rounded-full"
+          >
+            Sign Up
+          </Button>
           <Button
             variant="outline"
             onclick={() => handleNavClick("signin")}
             class="cursor-pointer text-md font-medium border-gray-300 rounded-full"
           >
             Sign In
-          </Button>
-          <Button
-            onclick={() => handleNavClick("signup")}
-            class="cursor-pointer bg-white text-black text-md font-medium hover:bg-gray-300 transition-colors rounded-full"
-          >
-            Sign Up
           </Button>
         {/if}
       </div>
@@ -311,19 +280,19 @@
                 <ArrowRightIcon class="w-4 h-4" />
               </Button>
             {:else}
-              <!-- Not Authenticated: Show "Sign In" and "Sign Up" -->
+              <!-- Not Authenticated: Show "Sign Up" and "Sign In" -->
+              <Button
+                onclick={() => handleNavClick("signup")}
+                class="w-full hover:bg-gray-300 text-black rounded-full"
+              >
+                Sign Up
+              </Button>
               <Button
                 variant="outline"
                 onclick={() => handleNavClick("signin")}
                 class="w-full border-gray-300 rounded-full"
               >
                 Sign In
-              </Button>
-              <Button
-                onclick={() => handleNavClick("signup")}
-                class="w-full hover:bg-gray-300 text-black rounded-full"
-              >
-                Sign Up
               </Button>
             {/if}
           </div>
@@ -381,10 +350,10 @@
         <div class="flex">
           <Button
             size="lg"
-            onclick={() => handleNavClick("newchat")}
+            onclick={() => handleNavClick("signup")}
             class="cursor-pointer bg-white text-black px-8 py-3 text-lg font-semibold hover:bg-gray-300 transition-colors rounded-full"
           >
-            Get Started for Free
+            Get Started
           </Button>
         </div>
 
@@ -626,12 +595,10 @@
       <h2 class="text-3xl sm:text-4xl font-bold mb-4">
         Simple, Transparent Pricing
       </h2>
-      <p class="text-lg text-muted-foreground max-w-2xl mx-auto">
-        Start free and scale as you grow. No hidden fees, no surprises.
-      </p>
     </div>
 
     <!-- Free Plan Card (Horizontal) -->
+    {#if freePlan}
     <div class="flex justify-center mb-8">
       <Card.Root class="max-w-2xl w-full">
         <Card.Content class="px-5">
@@ -641,11 +608,11 @@
             <!-- Left: Title, Price -->
             <div class="flex items-center">
               <div>
-                <h3 class="text-lg font-semibold mb-0.5">{freePlan.name}</h3>
+                <h3 class="text-lg font-semibold mb-0.5">{freePlan.tier.toUpperCase()}</h3>
                 <div class="flex items-baseline gap-1">
-                  <span class="text-2xl font-semibold">{freePlan.price}</span>
+                  <span class="text-2xl font-semibold">{formatPrice(freePlan.priceAmount, freePlan.currency)}</span>
                   <span class="text-sm text-muted-foreground"
-                    >/{freePlan.period}</span
+                    >/{freePlan.billingInterval}</span
                   >
                 </div>
               </div>
@@ -696,21 +663,23 @@
         </Card.Content>
       </Card.Root>
     </div>
+    {/if}
 
     <!-- Paid Plans Grid -->
+    {#if paidPlans && paidPlans.length > 0}
     <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-6">
       {#each paidPlans as plan}
         <Card.Root
           class="relative transition-all duration-300 hover:shadow-lg h-full"
         >
           <Card.Content class="px-8 py-4 text-center h-full flex flex-col">
-            <h3 class="text-xl font-bold mb-4">{plan.name}</h3>
+            <h3 class="text-xl font-bold mb-4">{plan.tier.toUpperCase()}</h3>
 
             <div class="mb-6">
               <span class="text-4xl font-bold">
-                {plan.price}
+                {formatPrice(plan.priceAmount, plan.currency)}
               </span>
-              <span class="text-muted-foreground">/{plan.period}</span>
+              <span class="text-muted-foreground">/{plan.billingInterval}</span>
             </div>
 
             <ul class="space-y-3 mb-6 flex-grow">
@@ -749,6 +718,7 @@
         </Card.Root>
       {/each}
     </div>
+    {/if}
 
     <!-- View All Pricing Link -->
     <div class="text-center">
@@ -789,10 +759,10 @@
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             size="lg"
-            onclick={() => handleNavClick("newchat")}
+            onclick={() => handleNavClick("signup")}
             class="cursor-pointer bg-white hover:bg-gray-300 px-8 py-3 text-lg font-semibold"
           >
-            Get Started for Free
+            Get Started
             <ArrowRightIcon class="w-4 h-4" />
           </Button>
         </div>
@@ -827,19 +797,6 @@
             AI, Black Forest Labs, Kling AI, Luma Labs, and Alibaba. This
             includes text generation models like Claude, GPT, Gemini, and Llama,
             plus 25+ image generation models and 8+ video generation models.
-          </Accordion.Content>
-        </Accordion.Item>
-
-        <Accordion.Item value="pricing">
-          <Accordion.Trigger class="text-white text-lg">
-            How does your pricing work?
-          </Accordion.Trigger>
-          <Accordion.Content class="text-gray-300 text-base">
-            We offer a free tier with basic text generation, limited image
-            creation, and chat history. Our Professional plan ($19/month)
-            includes unlimited text generation, advanced image models, video
-            generation, and priority support. Enterprise plans ($49/month) add
-            custom limits.
           </Accordion.Content>
         </Accordion.Item>
 
@@ -886,20 +843,8 @@
           </Accordion.Trigger>
           <Accordion.Content class="text-gray-300 text-base">
             Yes! Our Advanced plan includes all Pro features plus custom usage
-            limits, priority support, and advanced admin controls. Contact us
-            for custom advanced solutions and volume pricing.
-          </Accordion.Content>
-        </Accordion.Item>
-
-        <Accordion.Item value="free-tier">
-          <Accordion.Trigger class="text-white text-lg">
-            What's included in the free tier?
-          </Accordion.Trigger>
-          <Accordion.Content class="text-gray-300 text-base">
-            Our free tier includes basic text generation capabilities, limited
-            image creation, chat history storage, and access to select AI
-            models. It's perfect for trying out the platform and light usage. No
-            credit card required to get started.
+            limits, priority support, and advanced admin controls. Contact us at
+            support@zably.chat for custom advanced solutions and volume pricing.
           </Accordion.Content>
         </Accordion.Item>
 
@@ -908,10 +853,11 @@
             Can I cancel my subscription anytime?
           </Accordion.Trigger>
           <Accordion.Content class="text-gray-300 text-base">
-            Absolutely! You can cancel your subscription at any time through
-            your account settings. There are no long-term contracts or
-            cancellation fees. Your access will continue until the end of your
-            current billing period.
+            Yes, you can cancel your subscription at any time through your
+            account settings. There are no long-term contracts or cancellation
+            fees. Your access will continue until the end of your current
+            billing period. Please note that we do not offer refunds for partial
+            months or unused services.
           </Accordion.Content>
         </Accordion.Item>
       </Accordion.Root>
@@ -922,8 +868,26 @@
 <!-- Footer -->
 <footer class="border-t py-8 px-4" style="background-color: #101011">
   <div class="container mx-auto text-center">
-    <p class="text-sm text-muted-foreground">
-      © 2025 WeaveAI. All rights reserved.
-    </p>
+    <div class="flex flex-col items-center gap-4">
+      <!-- Footer Links -->
+      <div class="flex gap-6 text-sm">
+        <a
+          href="/privacy"
+          class="text-gray-400 hover:text-white transition-colors"
+        >
+          Privacy Policy
+        </a>
+        <a
+          href="/terms"
+          class="text-gray-400 hover:text-white transition-colors"
+        >
+          Terms of Service
+        </a>
+      </div>
+      <!-- Copyright -->
+      <p class="text-sm text-muted-foreground">
+        © 2025 ZablyAI. All rights reserved.
+      </p>
+    </div>
   </div>
 </footer>

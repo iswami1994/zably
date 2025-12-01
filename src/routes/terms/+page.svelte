@@ -1,16 +1,239 @@
 <script lang="ts">
-  import Button from "$lib/components/ui/button/button.svelte";
   import { goto } from "$app/navigation";
-  import { ArrowLeftIcon } from "$lib/icons/index.js";
+  import { browser } from "$app/environment";
+  import { getContext } from "svelte";
+  import Button from "$lib/components/ui/button/button.svelte";
+  import * as NavigationMenu from "$lib/components/ui/navigation-menu/index.js";
+  import Logo from "$lib/components/Logo.svelte";
+  import type { SettingsState } from "$lib/stores/settings.svelte.js";
+  import type { Session } from "@auth/sveltekit";
+  import {
+    isInIframe,
+    breakOutToPath,
+  } from "$lib/utils/codecanyon-detection.js";
+
+  // Get settings from context
+  const settingsState = getContext<SettingsState>("settings");
+
+  // Get session from context
+  const getSession = getContext<() => Session | null>("session");
+  const session = $derived(getSession?.() || null);
+
+  // Icons
+  import {
+    ArrowRightIcon,
+    MenuIcon,
+    XIcon,
+  } from "$lib/icons/index.js";
+
+  // Mobile menu state
+  let mobileMenuOpen = $state(false);
+
+  // Smooth scroll to section
+  function scrollToSection(sectionId: string) {
+    if (!browser) return;
+
+    mobileMenuOpen = false;
+    goto(`/#${sectionId}`);
+  }
+
+  // Handle navigation clicks
+  function handleNavClick(target: string) {
+    if (target === "home") {
+      if (isInIframe()) {
+        breakOutToPath("/");
+      } else {
+        goto("/");
+      }
+    } else if (target === "signup") {
+      if (isInIframe()) {
+        breakOutToPath("/register");
+      } else {
+        goto("/register");
+      }
+    } else if (target === "signin") {
+      if (isInIframe()) {
+        breakOutToPath("/login");
+      } else {
+        goto("/login");
+      }
+    } else if (target === "newchat") {
+      if (isInIframe()) {
+        breakOutToPath("/newchat");
+      } else {
+        goto("/newchat");
+      }
+    } else {
+      scrollToSection(target);
+    }
+  }
 </script>
 
 <svelte:head>
-  <title>Terms of Service - AI Models Platform</title>
+  <title>Terms of Service - {settingsState.siteName}</title>
   <meta
     name="description"
-    content="Terms of Service for AI Models Platform. Review our terms and conditions for using our AI-powered services."
+    content="Terms of Service for {settingsState.siteName}. Review our terms and conditions for using our AI-powered services."
   />
 </svelte:head>
+
+<!-- Navigation Header -->
+<nav
+  class="sticky top-0 z-50 w-full border-gray-800 bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/60"
+>
+  <div class="container mx-auto px-4">
+    <div class="flex h-16 items-center relative">
+      <!-- Logo -->
+      <div class="flex items-center">
+        <Logo alt="App Logo" />
+      </div>
+
+      <!-- Desktop Navigation - Absolutely Centered -->
+      <div class="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
+        <NavigationMenu.Root class="relative">
+          <NavigationMenu.List class="flex items-center space-x-1">
+            <NavigationMenu.Item>
+              <button
+                class="cursor-pointer px-4 py-2 text-md font-medium text-gray-300 transition-colors hover:text-white"
+                onclick={() => handleNavClick("home")}
+              >
+                Home
+              </button>
+            </NavigationMenu.Item>
+            <NavigationMenu.Item>
+              <button
+                class="cursor-pointer px-4 py-2 text-md font-medium text-gray-300 transition-colors hover:text-white"
+                onclick={() => handleNavClick("features")}
+              >
+                Features
+              </button>
+            </NavigationMenu.Item>
+            <NavigationMenu.Item>
+              <button
+                class="cursor-pointer px-4 py-2 text-md font-medium text-gray-300 transition-colors hover:text-white"
+                onclick={() => handleNavClick("pricing")}
+              >
+                Pricing
+              </button>
+            </NavigationMenu.Item>
+            <NavigationMenu.Item>
+              <button
+                class="cursor-pointer px-4 py-2 text-md font-medium text-gray-300 transition-colors hover:text-white"
+                onclick={() => handleNavClick("faq")}
+              >
+                FAQ
+              </button>
+            </NavigationMenu.Item>
+          </NavigationMenu.List>
+        </NavigationMenu.Root>
+      </div>
+
+      <!-- CTA Buttons -->
+      <div class="ml-auto hidden md:flex items-center gap-2">
+        {#if session?.user}
+          <!-- Authenticated: Show "Go to App" -->
+          <Button
+            onclick={() => handleNavClick("newchat")}
+            class="cursor-pointer bg-white text-black text-md font-semibold hover:bg-gray-300 transition-colors rounded-full"
+          >
+            Go to App
+            <ArrowRightIcon class="w-4 h-4" />
+          </Button>
+        {:else}
+          <!-- Not Authenticated: Show "Sign Up" and "Sign In" -->
+          <Button
+            onclick={() => handleNavClick("signup")}
+            class="cursor-pointer bg-white text-black text-md font-medium hover:bg-gray-300 transition-colors rounded-full"
+          >
+            Sign Up
+          </Button>
+          <Button
+            variant="outline"
+            onclick={() => handleNavClick("signin")}
+            class="cursor-pointer text-md font-medium border-gray-300 rounded-full"
+          >
+            Sign In
+          </Button>
+        {/if}
+      </div>
+
+      <!-- Mobile Menu Button -->
+      <div class="md:hidden ml-auto">
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+          class="p-2"
+        >
+          {#if mobileMenuOpen}
+            <XIcon class="w-5 h-5" />
+          {:else}
+            <MenuIcon class="w-5 h-5" />
+          {/if}
+        </Button>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Menu -->
+    {#if mobileMenuOpen}
+      <div class="md:hidden border-t border-gray-800 bg-black">
+        <div class="px-2 pt-2 pb-3 space-y-1">
+          <button
+            class="block w-full text-left px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-accent hover:text-white rounded-md"
+            onclick={() => handleNavClick("home")}
+          >
+            Home
+          </button>
+          <button
+            class="block w-full text-left px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-accent hover:text-white rounded-md"
+            onclick={() => handleNavClick("features")}
+          >
+            Features
+          </button>
+          <button
+            class="block w-full text-left px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-accent hover:text-white rounded-md"
+            onclick={() => handleNavClick("pricing")}
+          >
+            Pricing
+          </button>
+          <button
+            class="block w-full text-left px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-accent hover:text-white rounded-md"
+            onclick={() => handleNavClick("faq")}
+          >
+            FAQ
+          </button>
+          <div class="px-3 py-2 space-y-2">
+            {#if session?.user}
+              <!-- Authenticated: Show "Go to App" -->
+              <Button
+                onclick={() => handleNavClick("newchat")}
+                class="w-full hover:bg-gray-300 text-black rounded-full"
+              >
+                Go to App
+                <ArrowRightIcon class="w-4 h-4" />
+              </Button>
+            {:else}
+              <!-- Not Authenticated: Show "Sign Up" and "Sign In" -->
+              <Button
+                onclick={() => handleNavClick("signup")}
+                class="w-full hover:bg-gray-300 text-black rounded-full"
+              >
+                Sign Up
+              </Button>
+              <Button
+                variant="outline"
+                onclick={() => handleNavClick("signin")}
+                class="w-full border-gray-300 rounded-full"
+              >
+                Sign In
+              </Button>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {/if}
+  </div>
+</nav>
 
 <div class="container mx-auto p-6 max-w-4xl">
   <!-- Header -->
@@ -94,7 +317,7 @@
       </ul>
       <p class="mb-4">
         Subscriptions will automatically renew unless cancelled before the
-        renewal date. Refunds may be provided at our sole discretion.
+        renewal date. We do not offer refunds under any circumstances.
       </p>
     </section>
 
@@ -165,9 +388,35 @@
         us at:
       </p>
       <p class="mb-4">
-        Email: legal@aimodelsplatform.com<br />
-        Address: [Your Company Address]
+        Email: support@zably.chat
       </p>
     </section>
   </div>
 </div>
+
+<!-- Footer -->
+<footer class="border-t py-8 px-4" style="background-color: #101011">
+  <div class="container mx-auto text-center">
+    <div class="flex flex-col items-center gap-4">
+      <!-- Footer Links -->
+      <div class="flex gap-6 text-sm">
+        <a
+          href="/privacy"
+          class="text-gray-400 hover:text-white transition-colors"
+        >
+          Privacy Policy
+        </a>
+        <a
+          href="/terms"
+          class="text-gray-400 hover:text-white transition-colors"
+        >
+          Terms of Service
+        </a>
+      </div>
+      <!-- Copyright -->
+      <p class="text-sm text-muted-foreground">
+        © 2025 ZablyAI. All rights reserved.
+      </p>
+    </div>
+  </div>
+</footer>
