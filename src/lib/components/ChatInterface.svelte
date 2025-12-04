@@ -28,6 +28,7 @@
   import type { AIModelConfig } from "$lib/ai/types.js";
   import { providerConfig } from "$lib/config/provider-icons.js";
   import { GUEST_MESSAGE_LIMIT } from "$lib/constants/guest-limits.js";
+  import { isUserFreeTier, FREE_TIER_MESSAGE_LIMIT } from "$lib/constants/free-tier-limits.js";
   import {
     parseMarkdown,
     applySyntaxHighlighting,
@@ -55,6 +56,9 @@
 
   // Model filter state
   let modelFilter = $state<"all" | "images" | "videos">("all");
+
+  // Check if user is on free tier
+  const isFreeTier = $derived(chatState.userId && isUserFreeTier(chatState.userPlanTier));
 
   // Textarea implementation based on thom-chat
   let textarea = $state<HTMLTextAreaElement>();
@@ -297,6 +301,9 @@
 
     // Disable for guests who have reached their limit
     if (!chatState.canGuestSendMessage()) return true;
+
+    // Disable for free tier users who have reached their limit
+    if (!chatState.canFreeTierSendMessage()) return true;
 
     return false;
   });
@@ -972,6 +979,36 @@
         </div>
       {/if}
 
+      <!-- Free tier limitation indicator -->
+      {#if isFreeTier}
+        <div class="mb-2 px-2 text-sm text-muted-foreground">
+          <div class="flex items-center justify-between">
+            <span>
+              Free tier: {chatState.freeTierMessageCount} / {FREE_TIER_MESSAGE_LIMIT} messages used
+            </span>
+            {#if chatState.canFreeTierSendMessage()}
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={() => (window.location.href = "/pricing")}
+                class="h-7 underline px-2 cursor-pointer hover:bg-accent"
+              >
+                Upgrade to unlock unlimited messages
+              </Button>
+            {:else}
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={() => (window.location.href = "/pricing")}
+                class="h-7 underline px-2 cursor-pointer hover:bg-accent text-orange-600 dark:text-orange-400"
+              >
+                Upgrade to continue chatting
+              </Button>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       <!-- Textarea with embedded model selector and send button -->
       <div class="relative w-full border bg-background rounded-2xl shadow-lg">
         <textarea
@@ -1209,24 +1246,26 @@
                       />
                       <span class="text-sm font-light">All</span>
                     </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        bind:group={modelFilter}
-                        value="images"
-                        class="w-4 h-4 text-primary cursor-pointer"
-                      />
-                      <span class="text-sm font-light">Image generation</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        bind:group={modelFilter}
-                        value="videos"
-                        class="w-4 h-4 text-primary cursor-pointer"
-                      />
-                      <span class="text-sm font-light">Video generation</span>
-                    </label>
+                    {#if !isFreeTier}
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          bind:group={modelFilter}
+                          value="images"
+                          class="w-4 h-4 text-primary cursor-pointer"
+                        />
+                        <span class="text-sm font-light">Image generation</span>
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          bind:group={modelFilter}
+                          value="videos"
+                          class="w-4 h-4 text-primary cursor-pointer"
+                        />
+                        <span class="text-sm font-light">Video generation</span>
+                      </label>
+                    {/if}
                   </div>
                 </div>
 
@@ -1333,6 +1372,8 @@
                                 {#if isLocked}
                                   {#if !chatState.userId}
                                     {m["interface.sign_up_to_unlock"]()}
+                                  {:else if isFreeTier}
+                                    Upgrade to unlock
                                   {:else if chatState.userId && foundModel?.isDemoMode}
                                     {m["interface.not_available_in_demo"]()}
                                   {:else}

@@ -4,6 +4,7 @@ import type { AIModelConfig, AIMessage, AIResponse } from "$lib/ai/types.js";
 import { isMultimodal } from "$lib/ai/types.js";
 import { toast } from "svelte-sonner";
 import { GUEST_MESSAGE_LIMIT, GUEST_ALLOWED_MODELS } from "$lib/constants/guest-limits.js";
+import { FREE_TIER_MESSAGE_LIMIT, isUserFreeTier } from "$lib/constants/free-tier-limits.js";
 
 // File attachment types
 export interface AttachedFile {
@@ -29,6 +30,7 @@ export class ChatState {
   models = $state<AIModelConfig[]>([]);
   currentChatId = $state<string | null>(null);
   userId = $state<string | null>(null);
+  userPlanTier = $state<string | null>(null);
   chatHistory = $state<
     Array<{
       id: string;
@@ -62,6 +64,9 @@ export class ChatState {
   // Guest user limitations
   guestMessageCount = $state(0);
 
+  // Free tier user limitations (same as guest)
+  freeTierMessageCount = $state(0);
+
   // Tool selection
   selectedTool = $state<string | undefined>(undefined);
 
@@ -73,6 +78,7 @@ export class ChatState {
     if (browser) {
       this.loadModels();
       this.loadGuestMessageCount();
+      this.loadFreeTierMessageCount();
       // Note: chat history will be loaded when session is established
     }
   }
@@ -86,9 +92,11 @@ export class ChatState {
     $effect(() => {
       const session = getSession();
       const currentSessionId = session?.user?.id || null;
+      const currentPlanTier = session?.user?.planTier || null;
 
-      // Update userId state
+      // Update userId and planTier state
       this.userId = currentSessionId;
+      this.userPlanTier = currentPlanTier;
 
       // Only reload if session actually changed
       if (currentSessionId !== previousSessionId) {
@@ -97,6 +105,7 @@ export class ChatState {
           // User logged in, load chat history and reset guest count
           this.loadChatHistory();
           this.resetGuestMessageCount();
+          this.loadFreeTierMessageCount(); // Load free tier message count
           this.loadModels(); // Reload models to get full access
         } else {
           // User logged out, clear chat history and load guest count
@@ -203,6 +212,56 @@ export class ChatState {
     }
   }
 
+  // Load free tier message count from localStorage
+  loadFreeTierMessageCount() {
+    if (!browser) return;
+
+    try {
+      const stored = localStorage.getItem(`freeTierMessageCount_${this.userId}`);
+      this.freeTierMessageCount = stored ? parseInt(stored, 10) : 0;
+    } catch (err) {
+      console.warn('Failed to load free tier message count:', err);
+      this.freeTierMessageCount = 0;
+    }
+  }
+
+  // Save free tier message count to localStorage
+  saveFreeTierMessageCount() {
+    if (!browser || !this.userId) return;
+
+    try {
+      localStorage.setItem(`freeTierMessageCount_${this.userId}`, this.freeTierMessageCount.toString());
+    } catch (err) {
+      console.warn('Failed to save free tier message count:', err);
+    }
+  }
+
+  // Check if free tier user can send message
+  canFreeTierSendMessage(): boolean {
+    if (!this.userId || !isUserFreeTier(this.userPlanTier)) return true; // Not free tier or not logged in
+    return this.freeTierMessageCount < FREE_TIER_MESSAGE_LIMIT;
+  }
+
+  // Increment free tier message count
+  incrementFreeTierMessageCount() {
+    if (this.userId && isUserFreeTier(this.userPlanTier)) {
+      this.freeTierMessageCount++;
+      this.saveFreeTierMessageCount();
+    }
+  }
+
+  // Reset free tier message count (when user upgrades)
+  resetFreeTierMessageCount() {
+    this.freeTierMessageCount = 0;
+    if (browser && this.userId) {
+      try {
+        localStorage.removeItem(`freeTierMessageCount_${this.userId}`);
+      } catch (err) {
+        console.warn('Failed to reset free tier message count:', err);
+      }
+    }
+  }
+
   // Reset guest message count (when user logs in)
   resetGuestMessageCount() {
     this.guestMessageCount = 0;
@@ -236,6 +295,9 @@ export class ChatState {
       if (!this.userId) {
         // Guest user error message
         errorMsg = "Guest users can only use the allowed guest models. Please sign up for access to all models.";
+      } else if (isUserFreeTier(this.userPlanTier)) {
+        // Free tier user error message
+        errorMsg = "This model is not available on the free tier. Please upgrade to a paid plan for access to all models.";
       } else if (this.userId && model?.isDemoMode) {
         // Demo mode error message (logged in user in demo mode)
         errorMsg = "This model is not available in Demo Mode. Contact administrator for full access.";
@@ -812,12 +874,21 @@ export class ChatState {
       return;
     }
 
+    // Check free tier message limits
+    if (!this.canFreeTierSendMessage()) {
+      this.error = `You've reached the ${FREE_TIER_MESSAGE_LIMIT} message limit for free tier users. Please upgrade to a paid plan to continue chatting.`;
+      toast.error(this.error);
+      return;
+    }
+
     // Check if user is trying to use a locked model
     const selectedModelData = this.models.find(m => m.name === this.selectedModel);
     if (selectedModelData?.isLocked) {
       let errorMsg: string;
       if (!this.userId) {
         errorMsg = "Guest users can only use the allowed guest models. Please sign up for access to all models.";
+      } else if (isUserFreeTier(this.userPlanTier)) {
+        errorMsg = "This model is not available on the free tier. Please upgrade to a paid plan for access to all models.";
       } else if (selectedModelData?.isDemoMode) {
         errorMsg = "This model is not available in Demo Mode. Contact administrator for full access.";
       } else {
@@ -915,6 +986,9 @@ export class ChatState {
 
       // Increment guest message count for non-logged users
       this.incrementGuestMessageCount();
+
+      // Increment free tier message count for free tier users
+      this.incrementFreeTierMessageCount();
 
       this.prompt = "";
       this.clearAttachedFiles(); // Clear attachments after sending

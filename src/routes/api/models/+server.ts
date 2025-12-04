@@ -4,6 +4,7 @@ import { getAllModels } from '$lib/ai/index.js';
 import { waitForEnrichmentCompletion } from '$lib/ai/providers/openrouter.js';
 import { isModelAllowedForGuests } from '$lib/constants/guest-limits.js';
 import { isDemoModeEnabled, isModelAllowedForDemo, isDemoModeRestricted } from '$lib/constants/demo-mode.js';
+import { isModelAllowedForFreeTier, isUserFreeTier } from '$lib/constants/free-tier-limits.js';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	try {
@@ -22,15 +23,20 @@ export const GET: RequestHandler = async ({ locals }) => {
 		// Check if user is logged in
 		const session = await locals.getSession();
 		const isLoggedIn = !!session?.user?.id;
+		const userPlanTier = session?.user?.planTier;
 
 		// Check demo mode status
 		const demoModeEnabled = isDemoModeEnabled();
 		const userDemoRestricted = isDemoModeRestricted(isLoggedIn);
 
+		// Check if user is on free tier
+		const isFreeTier = isLoggedIn && isUserFreeTier(userPlanTier);
+
 		// Add guest access and demo mode flags to all models
 		const models = allModels.map(model => {
 			const guestAllowed = isModelAllowedForGuests(model.name);
 			const demoAllowed = isModelAllowedForDemo(model.name);
+			const freeTierAllowed = isModelAllowedForFreeTier(model.name);
 
 			let isLocked = false;
 
@@ -38,11 +44,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 			if (!isLoggedIn) {
 				// Guest users - check guest restrictions
 				isLocked = !guestAllowed;
+			} else if (isFreeTier) {
+				// Free tier users - same restrictions as guest users
+				// Only allow text models, no image/video generation
+				isLocked = !freeTierAllowed;
 			} else if (userDemoRestricted) {
 				// Logged-in users in demo mode - check demo restrictions
 				isLocked = !demoAllowed;
 			}
-			// Logged-in users in normal mode - no restrictions (isLocked = false)
+			// Paid users in normal mode - no restrictions (isLocked = false)
 
 			return {
 				...model,

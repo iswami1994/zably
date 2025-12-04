@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getModelProvider } from '$lib/ai/index.js';
 import type { AIResponse, AIImageResponse, AIMessage } from '$lib/ai/types.js';
+import { isUserFreeTier } from '$lib/constants/free-tier-limits.js';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
@@ -9,6 +10,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const session = await locals.auth();
 		if (!session?.user?.id) {
 			return json({ error: 'Authentication required' }, { status: 401 });
+		}
+
+		// Check if user is on free tier - block multimodal chat
+		if (isUserFreeTier(session.user.planTier)) {
+			return json({
+				error: 'Multimodal chat (image/video input) is not available on the free tier. Please upgrade to a paid plan to access multimodal features.',
+				type: 'tier_restriction'
+			}, { status: 403 });
 		}
 
 		const body = await request.json();

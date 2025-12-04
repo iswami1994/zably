@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { getModelProvider } from '$lib/ai/index.js';
 import type { ImageGenerationParams, AIImageStreamChunk } from '$lib/ai/types.js';
 import { UsageTrackingService, UsageLimitError } from '$lib/server/usage-tracking.js';
+import { isUserFreeTier } from '$lib/constants/free-tier-limits.js';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
@@ -10,6 +11,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const session = await locals.auth();
 		if (!session?.user?.id) {
 			return json({ error: 'Authentication required' }, { status: 401 });
+		}
+
+		// Check if user is on free tier - block image generation
+		if (isUserFreeTier(session.user.planTier)) {
+			return json({
+				error: 'Image generation is not available on the free tier. Please upgrade to a paid plan to access image generation.',
+				type: 'tier_restriction'
+			}, { status: 403 });
 		}
 
 		const body = await request.json();
