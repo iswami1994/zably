@@ -21,9 +21,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 		const allModels = getAllModels();
 
 		// Check if user is logged in
-		const session = await locals.getSession();
+		// Use locals.auth() to get the enhanced session with planTier from database
+		const session = await locals.auth();
 		const isLoggedIn = !!session?.user?.id;
 		const userPlanTier = session?.user?.planTier;
+
+		// Debug logging
+		console.log('[/api/models] Session debug:', {
+			isLoggedIn,
+			userId: session?.user?.id,
+			userPlanTier,
+			email: session?.user?.email
+		});
 
 		// Check demo mode status
 		const demoModeEnabled = isDemoModeEnabled();
@@ -31,6 +40,12 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 		// Check if user is on free tier
 		const isFreeTier = isLoggedIn && isUserFreeTier(userPlanTier);
+
+		console.log('[/api/models] Access control:', {
+			isFreeTier,
+			demoModeEnabled,
+			userDemoRestricted
+		});
 
 		// Add guest access and demo mode flags to all models
 		const models = allModels.map(model => {
